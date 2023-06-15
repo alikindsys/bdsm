@@ -18,17 +18,53 @@ import java.util.List;
 
 public class CapabilityCrate implements ICrate
 {
+
+    /**
+     * The reference item to be stored in this crate.
+     * Should have the count property set to a of 1, since the crate item count is stored in count
+     * @see CapabilityCrate#getRefItem
+     * @see CapabilityCrate#insertItem(int, ItemStack, boolean)
+     */
     private ItemStack refStack = ItemStack.EMPTY;
+
+    /**
+     * The ore dictionary mappings.
+     * Should be optimized and only used when needed.
+     * Likely deferred as well since constantly checking this can lead to hanging up.
+     * Work could be done in order to permanently cache this into an NBT array.
+     * Simplification of the data being retained also could help in reducing the impacts of accessing this array.
+     */
     private final List<OreIngredient> cachedOres = new ArrayList<>();
+
+    /**
+     * The maximum amount of stacks that can be fit inside this crate after upgrades are applied.
+     */
     private int maxStackCapacity;
     private boolean oreDict = false;
     private boolean lock = false;
     private boolean overflow = false;
     private int[] colors = new int[]{0xFFFFFFFF, 0xFFFFFFFF};
-    
+
+
+    /**
+     *  How many item stacks can fit on this crate
+     */
     private int stackCapacity;
+
+    /**
+     * The current item count
+     */
+
+    // TODO: Sort out the madness that's happening here.
+    //       The assignments to this makes no sense and it really is a wonder that this is working.
     private int count = 0;
-    
+
+    /**
+     * A callback used to trigger an event once a crate is modified.
+     * Called on the start of the crate synchronization.
+     * @see ICrateCallback#onCrateChanged()
+     * @see CapabilityCrate#syncContainer()
+     */
     private ICrateCallback callback;
     
     public CapabilityCrate(int initCap, int maxStackCap)
@@ -58,7 +94,12 @@ public class CapabilityCrate implements ICrate
         }
     }
     
-    /** READ ONLY */
+    /**
+     * The ItemStack being stored on this crate.
+     * It's count should always be equals to 1.
+     * The original javadocs said this was "Read-Only" although there is no guarantees that
+     * this contract was ever followed by the mod.
+     **/
     @Nonnull
     @Override
     public ItemStack getRefItem()
@@ -119,7 +160,16 @@ public class CapabilityCrate implements ICrate
         this.callback = callback;
         return this;
     }
-    
+
+
+    /**
+     * All this function seems to do is synchronize slotRef with refStack
+     * or updates the count of the stack to be the same as the crate's count
+     * and sends a event to the callback.
+     * A sync is always called unless the item transfer is simulated.
+     * @see CapabilityCrate#slotRef
+     * @see CapabilityCrate#refStack
+     */
     @Override
     public void syncContainer()
     {
@@ -143,13 +193,19 @@ public class CapabilityCrate implements ICrate
             }
         }
     }
-    
+
+    /**
+     * @return The current stack capacity.
+     */
     @Override
     public int getStackCap()
     {
         return this.stackCapacity;
     }
-    
+
+    /**
+     * @return The maximum stack capacity after applying all upgrades.
+     */
     @Override
     public int getUpgradeCap()
     {
@@ -173,21 +229,56 @@ public class CapabilityCrate implements ICrate
     {
         this.stackCapacity = value;
     }
-    
+
+    /**
+     * @return The current item count, if the barrel doesn't have a Creative Upgrade.
+     * Or the creative item count, if the barrel has a Creative Upgrade.
+     */
     @Override
     public int getCount()
     {
         return stackCapacity < 0 ? ((1 << 15) * refStack.getMaxStackSize()) : this.count;
     }
-    
+
+    /**
+     * Is set to 2 for unknown reasons.
+     * A comment says there is something to deal with Ore Dictionary handling.
+     * @return Always returns 2.
+     */
+
     @Override
     public int getSlots()
     {
         return 2;//(oreDict || overflow) ? 2 : 1;
     }
-    
+
+    /**
+     * As far as I was able to search, this represents some "internal state" of the crate
+     * that's assigned at NBT deserialization and updated at container synchronization
+     * to keep its internal count similar to the crate's count.
+     * Has 13 usages, and they're all internal to this class.
+     * Exposed only via getStackInSlot, which makes me believe that the main use of this
+     * is to fake the Inventory API.
+     * We can treat this as a "ghost" ItemStack that duplicates data.
+     * Data duplication is bad but that's the least of our concerns.
+     * @see CapabilityCrate#refStack
+     * @see CapabilityCrate#syncContainer()
+     * @see CapabilityCrate#deserializeNBT(NBTTagCompound)
+     * @see CapabilityCrate#getStackInSlot(int)
+     */
     private ItemStack slotRef = ItemStack.EMPTY;
-    
+
+    /**
+     * This function is defined by Forge not the mod.
+     * This really is the only case where slotRef is exposed. Everything else uses refStack.
+     * The most strange part of this is there's a lot of code around on this codebase that
+     * basically takes refStack, clones it and sets the clone's count to the crate's count
+     * (which was supposed to be slotRef's whole purpose????).
+     * @param slot Slot to query
+     * @return slotRef, if slot is equals to zero.
+     * ItemStack.EMPTY otherwise.
+     * @see CapabilityCrate#slotRef
+     */
     @Nonnull
     @Override
     public ItemStack getStackInSlot(int slot)
@@ -292,7 +383,14 @@ public class CapabilityCrate implements ICrate
         
         return copy;
     }
-    
+
+
+    /**
+     * @param slot Slot to query.
+     * @return Integer.MAX_VALUE if the "Overflow Upgrade" is installed.
+     * 64 if there is no item currently inserted.
+     * stackCapacity * item's stack size if some item is inserted.
+     */
     @Override
     public int getSlotLimit(int slot)
     {
