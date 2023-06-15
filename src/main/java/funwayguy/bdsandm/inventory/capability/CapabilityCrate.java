@@ -134,26 +134,27 @@ public class CapabilityCrate implements ICrate
     @Override
     public boolean canMergeWith(ItemStack stack)
     {
-        if(ItemStack.areItemStackTagsEqual(refStack, stack))
-        {
-            if(ItemStack.areItemsEqual(refStack, stack))
-            {
-                return true;
-            } else if(oreDict)
-            {
-                for(OreIngredient ing : cachedOres)
-                {
-                    if(ing.apply(stack))
-                    {
-                        return true;
-                    }
-                }
+        // You can always merge with an empty stack
+        // With this change `canMergeWith` is call order-independent.
+        // It was previously needed that the refStack was set to something prior
+        // to calling this function, since Empty != Any and it would return false.
+
+        if (refStack == ItemStack.EMPTY) return true;
+
+        boolean nonOreCheck =
+                ItemStack.areItemsEqual(refStack, stack) && ItemStack.areItemStackTagsEqual(refStack, stack);
+
+        // Checking the ore dictionary is more expensive than doing ItemStack comparisons.
+        // Only run ore dictionary checks if the simplest checks failed.
+        if (!nonOreCheck && oreDict) {
+            for (OreIngredient ore : cachedOres) {
+                if(ore.apply(stack)) return true;
             }
         }
-        
-        return false;
+
+        return nonOreCheck;
     }
-    
+
     @Override
     public CapabilityCrate setCallback(ICrateCallback callback)
     {
