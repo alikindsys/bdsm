@@ -351,7 +351,11 @@ public class CapabilityCrate implements ICrate
         
         return copy;
     }
-    
+
+    private boolean isCreativeCapacity() {
+        return stackCapacity == -1;
+    }
+
     @Nonnull
     @Override
     public ItemStack extractItem(int slot, int amount, boolean simulate)
