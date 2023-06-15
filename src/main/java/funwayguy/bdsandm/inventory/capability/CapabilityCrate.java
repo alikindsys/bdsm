@@ -238,7 +238,30 @@ public class CapabilityCrate implements ICrate
     @Override
     public int getCount()
     {
-        return stackCapacity < 0 ? ((1 << 15) * refStack.getMaxStackSize()) : this.count;
+        return isCreativeCapacity() ? getCreativeCap() : getSurvivalCount();
+    }
+
+    /**
+     * @return The barrel item count.
+     */
+    public int getSurvivalCount() {
+        return this.count;
+    }
+
+
+    /**
+     * @return The maximum amount of items that can fit on this barrel *with* a creative upgrade.
+     */
+    public int getCreativeCap() {
+        return getCreativeStackCap() * refStack.getMaxStackSize();
+    }
+
+
+    /**
+     * @return The creative stack capacity.
+     */
+    public int getCreativeStackCap() {
+        return (1 << 15);
     }
 
     /**
