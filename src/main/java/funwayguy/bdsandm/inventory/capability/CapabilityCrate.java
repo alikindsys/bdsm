@@ -375,6 +375,16 @@ public class CapabilityCrate implements ICrate
         return copy;
     }
 
+    public void populateOreDictCache(@Nonnull ItemStack stack) {
+        cachedOres.clear();
+        int[] oreDictIds = OreDictionary.getOreIDs(stack);
+        for (int id : oreDictIds) {
+            String name = OreDictionary.getOreName(id);
+            if (BdsmConfig.oreDictBlacklist.stream().anyMatch(name::matches)) continue;
+            cachedOres.add(new OreIngredient(name));
+        }
+    }
+
     private boolean invalidCrateSlot(int slot) {
         return slot >= 2 || slot < 0;
     }
