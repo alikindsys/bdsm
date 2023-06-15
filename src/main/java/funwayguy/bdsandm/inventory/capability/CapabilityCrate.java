@@ -248,6 +248,13 @@ public class CapabilityCrate implements ICrate
         return this.count;
     }
 
+    /**
+     * @return The maximum amount of items that can fit on this barrel *without* a creative upgrade.
+     */
+    public int getSurvivalCap() {
+        return this.stackCapacity * refStack.getMaxStackSize();
+    }
+
 
     /**
      * @return The maximum amount of items that can fit on this barrel *with* a creative upgrade.
