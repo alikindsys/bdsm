@@ -352,6 +352,10 @@ public class CapabilityCrate implements ICrate
         return copy;
     }
 
+    private boolean invalidCrateSlot(int slot) {
+        return slot >= 2 || slot < 0;
+    }
+
     private boolean isCreativeCapacity() {
         return stackCapacity == -1;
     }
