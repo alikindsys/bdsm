@@ -382,6 +382,12 @@ public class CapabilityCrate implements ICrate
         return copy;
     }
 
+    private long getSpaceRemaining() {
+        return isCreativeCapacity()
+                ? 0
+                : (long) stackCapacity * (long) refStack.getMaxStackSize() - getCount();
+    }
+
     public void populateOreDictCache(@Nonnull ItemStack stack) {
         cachedOres.clear();
         int[] oreDictIds = OreDictionary.getOreIDs(stack);
