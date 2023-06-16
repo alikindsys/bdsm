@@ -5,9 +5,6 @@ import funwayguy.bdsandm.core.BdsmConfig;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraftforge.energy.CapabilityEnergy;
-import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
-import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.oredict.OreDictionary;
 import net.minecraftforge.oredict.OreIngredient;
 
@@ -15,6 +12,8 @@ import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static funwayguy.bdsandm.utils.ItemStackUtils.isContainer;
 
 public class CapabilityCrate implements ICrate
 {
@@ -324,61 +323,111 @@ public class CapabilityCrate implements ICrate
     
     @Nonnull
     @Override
-    public ItemStack insertItem(int slot, @Nonnull ItemStack stack, boolean simulate)
-    {
-        if(slot < 0 || slot >= 2 || stack.isEmpty() || BdsmConfig.isBlacklisted(stack))
-        {
-            return stack;
-        } else if(refStack.isEmpty() || (stackCapacity < 0 && !lock))
-        {
-            if(lock || stack.hasCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null) || stack.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY, null) || stack.hasCapability(CapabilityEnergy.ENERGY, null))
-            {
-                return stack; // BANNED! Nested containers are not permitted!
-            } else if(!simulate)
-            {
-                refStack = stack.copy();
-                count = Math.min(stack.getCount(), (stackCapacity < 0 ? (1 << 15) : stackCapacity) * stack.getMaxStackSize());
-                refStack.setCount(1);
-                
-                cachedOres.clear();
-                int[] aryIDs = OreDictionary.getOreIDs(refStack);
-                topLoop:
-                for(int id : aryIDs)
-                {
-                    String name = OreDictionary.getOreName(id);
-                    for(String bl : BdsmConfig.oreDictBlacklist)
-                    {
-                        if(name.matches(bl)) continue topLoop;
-                    }
-                    cachedOres.add(new OreIngredient(name));
-                }
-                
-                syncContainer();
-            }
-            
-            int used = Math.min(stack.getCount(), (stackCapacity < 0 ? (1 << 15) : stackCapacity) * stack.getMaxStackSize());
-            if(used > stack.getCount()) return ItemStack.EMPTY;
-            ItemStack rStack = stack.copy();
-            rStack.shrink(used);
-            return rStack;
-        } else if(!canMergeWith(stack))
-        {
+    public ItemStack insertItem(int slot, @Nonnull ItemStack stack, boolean simulate) {
+        if (invalidCrateSlot(slot) || stack.isEmpty() || BdsmConfig.isBlacklisted(stack)) {
             return stack;
         }
-        
-        long rem = stackCapacity < 0 ? 0 : (long)stackCapacity * (long)refStack.getMaxStackSize() - getCount();
-        int add = (int)Math.min(rem, stack.getCount());
-        if(add < 0) add = 0;
-        
+
+        // If the barrel is empty and locked
+        if (refStack.isEmpty() && lock) {
+            return stack;
+        }
+
+        // Nested containers are banned
+        if (isContainer(stack)) {
+            return stack;
+        }
+
+        /*  Reduced:
+         *  if(!refStack.isEmpty() && !canMergeWith(stack)) {
+         *   return stack;
+         *  }
+         *  Now `canMergeWith(ItemStack.EMPTY) == true`.
+         */
+
+        if (!canMergeWith(stack)) {
+            return stack;
+        }
+
+
+        // Adding a new Item if there is no items
+        // OR Replacing the current item if it is creative AND is not locked.
+
+        if (refStack.isEmpty() || (isCreativeCapacity() && !lock)) {
+
+            /*  Lifted: isContainer check since nested containers are not allowed.
+             *  Lifted: lock check since it only runs if its locked and its empty.
+             *  if (lock || isContainer(stack)) {
+             *       return stack;
+             *   }
+             */
+
+            if (!simulate) {
+                refStack = stack.copy();
+                count = stack.getCount();
+                refStack.setCount(1);
+
+                populateOreDictCache(refStack);
+
+                syncContainer();
+            }
+
+            /* Reduced:
+             * int used = Math.min(stack.getCount(), (stackCapacity < 0 ? (1 << 15) : stackCapacity) * stack.getMaxStackSize());
+             * ^^^^ Can be reduced to `stack.getCount()`. ^^^^
+             * if(used > stack.getCount()) return ItemStack.EMPTY;
+             * ^^^^ Is never run since `used == stack.getCount()`.
+             * > ItemStack rStack = stack.copy();
+             * > rStack.shrink(used);
+             * > return rStack;
+             * ^^^^^ Can be reduced to ItemStack.EMPTY.
+             */
+
+
+            return ItemStack.EMPTY;
+
+        }
+
+        /* Lifted: `canMergeWith(ItemStack.EMPTY) == true`
+         * This makes it possible for checking if any item can merge
+         * with any other item, as merging with Nothing is now possible.
+         *
+         * Previously `canMergeWith(ItemStack.EMPTY) == false`, which lead
+         * to this call needing to be placed after the item type was already added.
+         *
+         * The call order no longer matters.
+         * vvvv
+         * else if (!canMergeWith(stack)) {
+         *   return stack;
+         * }
+         */
+
+        // Adding to an existing item.
+
+        long rem = getSpaceRemaining();
+        int stackCount = stack.getCount();
+
+        // If the remaining space is negative, we *really* have a problem.
+        assert rem >= 0;
+        // If the stack size is negative, we *really* have a problem.
+        assert stackCount > 0;
+
+        int add = (int) Math.min(rem, stackCount);
+
+        /* Lifted: Asserts that `rem` is positive.
+         * Asserts that `stackCount` is positive.
+         * The minimum of two positive numbers is a positive number.
+         * if(add < 0) add = 0;
+         */
+
         ItemStack copy = stack.copy();
         copy.setCount(overflow ? 0 : stack.getCount() - add);
-        
-        if(!simulate && add != 0)
-        {
+
+        if (!simulate && add != 0) {
             count += add;
             syncContainer();
         }
-        
+
         return copy;
     }
 
